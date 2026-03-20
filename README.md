@@ -47,7 +47,7 @@ bash run.sh install
 
 ## Data Preparation
 
-Annotation JSONs and image folders can live in **separate locations**. Configure both in `base.yaml`:
+Annotation JSONs ([Google Drive](https://drive.google.com/drive/folders/1aCm6M_ckjd2l1UJq7g5cDm4965m8Dk3c?usp=sharing)) and image folders can live in **separate locations**. Configure both in `base.yaml`:
 
 ```yaml
 # sam3/sam3/train/configs/sam3i/base.yaml
@@ -80,8 +80,8 @@ Many datasets share the same underlying images. Only **three** image sources are
 
 | Image source | Datasets | Download |
 |---|---|---|
-| **COCO train/val 2014** | RefCOCO, RefCOCOplus, RefCOCOg, gRefCOCO, Ref-ZOM | [train2014.zip](http://images.cocodataset.org/zips/train2014.zip) · [val2014.zip](http://images.cocodataset.org/zips/val2014.zip) |
-| **COCO train/val 2017** | HMPL-Instruct_1to1, HMPL-Instruct_1toN, HMPL-Instruct_1toAll, MMR | [train2017.zip](http://images.cocodataset.org/zips/train2017.zip) · [val2017.zip](http://images.cocodataset.org/zips/val2017.zip) |
+| **COCO train/val 2014** | RefCOCO, RefCOCOplus, RefCOCOg, gRefCOCO, Ref-ZOM | train2014.zip (http://images.cocodataset.org/zips/train2014.zip) <br> val2014.zip (http://images.cocodataset.org/zips/val2014.zip) |
+| **COCO train/val 2017** | HMPL-Instruct_1to1, HMPL-Instruct_1toN, HMPL-Instruct_1toAll, MMR | train2017.zip (http://images.cocodataset.org/zips/train2017.zip) <br> val2017.zip (http://images.cocodataset.org/zips/val2017.zip) |
 | **ReasonSeg** | ReasonSeg | [Google Drive](https://drive.google.com/drive/folders/125mewyg5Ao6tZ3ZdJ-1-E3n04LGVELqy) |
 
 ### Configuring Shared Image Folders
