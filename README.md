@@ -1,5 +1,7 @@
 # SAM3-I: Segment Anything with Instructions
 
+Note: The code is updated to the latest version. The improved paper is coming soon and will be updated on arXiv in mid-April.
+
 ## Directory Structure
 
 ```
