@@ -1,0 +1,37 @@
+# @package _global_
+# ============================================================================
+# SAM3-I Stage 1-2: Complex Query Training
+# ============================================================================
+# Inherits base.yaml, only overrides Stage 1-2 specific parameters.
+# Requires Stage 1-1 training to be completed first.
+# ============================================================================
+defaults:
+  - base
+  - _self_
+
+# Override paths: log directory
+paths:
+  experiment_log_dir: ./outputs/logs/sam3i_1-2
+
+# Stage 1-2 uses all images
+sam3i_datasets_train:
+  num_images: null
+
+# Trainer overrides
+trainer:
+  inst_stage: "1_2"
+  max_epochs: 8
+  model:
+    _target_: sam3.model_builder.build_sam3_image_model
+    bpe_path: ${paths.bpe_path}
+    # checkpoint_path: point to the Stage 1-1 checkpoint, e.g.:
+    checkpoint_path: ./outputs/logs/sam3i_1-1/checkpoints/checkpoint_8.pt
+    eval_mode: false
+    inst_stage: ${trainer.inst_stage}
+    enable_segmentation: ${scratch.enable_segmentation}
+    adapter_config: {
+                      "adapter_dim": 64,
+                      "adapter_heads": 4,
+                      "adapter_scale": 1.0,
+                    }
+    copy_adapter: True

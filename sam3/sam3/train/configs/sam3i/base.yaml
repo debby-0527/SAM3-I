@@ -1,0 +1,595 @@
+# @package _global_
+
+# ============================================================================
+# SAM3-I Base Configuration (Shared Across All Stages)
+# ============================================================================
+# Users only need to modify the paths section:
+#   - sam3i_datasets_root: Path to sam3i_datasets/, the local folder containing all datasets
+#   - experiment_log_dir: Directory for training logs / checkpoints
+#   - bpe_path:           Path to the BPE vocabulary file
+#
+# Stage-specific YAML files (sam3i_1-1, sam3i_1-2, sam3i_3_all)
+# inherit from this file and override their respective parameters.
+# ============================================================================
+
+# ============================================================================
+# Paths Configuration (Update to your own absolute paths)
+# ============================================================================
+paths:
+  # Root directory containing per-dataset annotation JSON files
+  # e.g. sam3i_datasets_root/RefCOCO/sam3i_train.json
+  sam3i_datasets_root: ./sam3i_datasets
+  # Root directory containing per-dataset image folders.
+  # Images do NOT have to reside under sam3i_datasets_root;
+  # set this to any path where the actual images are stored.
+  # e.g. sam3i_image_root/RefCOCO/<image files>
+  sam3i_image_root: ${paths.sam3i_datasets_root}
+
+  # -----------------------------------------------------------------------
+  # Per-dataset image folder mapping.
+  # Multiple datasets share the same underlying images. Group them by
+  # image source and point to a single folder to avoid data duplication.
+  #
+  # Only 3 image sources are needed:
+  #   COCO 2014  -> RefCOCO, RefCOCOplus, RefCOCOg, gRefCOCO, Ref-ZOM
+  #   COCO 2017  -> HMPL-Instruct_1to1, HMPL-Instruct_1toN,
+  #                 HMPL-Instruct_1toAll, MMR
+  #   ReasonSeg  -> ReasonSeg (standalone)
+  #
+  # Example (shared COCO 2014):
+  #   img_folder_RefCOCO:     /data/coco2014/
+  #   img_folder_RefCOCOplus: /data/coco2014/
+  #   img_folder_RefCOCOg:    /data/coco2014/
+  #   img_folder_gRefCOCO:    /data/coco2014/
+  #   img_folder_RefZOM:      /data/coco2014/
+  #
+  # Example (shared COCO 2017):
+  #   img_folder_HMPL_1to1:   /data/coco2017/
+  #   img_folder_HMPL_1toN:   /data/coco2017/
+  #   img_folder_HMPL_1toAll: /data/coco2017/
+  #   img_folder_MMR:         /data/coco2017/
+  # -----------------------------------------------------------------------
+
+  # -- COCO 2014 datasets (RefCOCO family + Ref-ZOM) --
+  img_folder_RefCOCO:     ${paths.sam3i_image_root}/RefCOCO/
+  img_folder_RefCOCOplus: ${paths.sam3i_image_root}/RefCOCOplus/
+  img_folder_RefCOCOg:    ${paths.sam3i_image_root}/RefCOCOg/
+  img_folder_gRefCOCO:    ${paths.sam3i_image_root}/gRefCOCO/
+  img_folder_RefZOM:      ${paths.sam3i_image_root}/Ref-ZOM/
+
+  # -- COCO 2017 datasets (HMPL family + MMR) --
+  img_folder_HMPL_1to1:   ${paths.sam3i_image_root}/HMPL-Instruct_1to1/
+  img_folder_HMPL_1toN:   ${paths.sam3i_image_root}/HMPL-Instruct_1toN/
+  img_folder_HMPL_1toAll: ${paths.sam3i_image_root}/HMPL-Instruct_1toAll/
+  img_folder_MMR:         ${paths.sam3i_image_root}/MMR/
+
+  # -- Standalone --
+  img_folder_ReasonSeg:   ${paths.sam3i_image_root}/ReasonSeg/
+
+  # Training log and checkpoint directory (overridden per stage)
+  experiment_log_dir: ./outputs/logs/default
+  # BPE vocabulary path (located under sam3/assets/)
+  bpe_path: ./assets/bpe_simple_vocab_16e6.txt.gz
+
+# ============================================================================
+# Dataset Configuration
+# ============================================================================
+sam3i_datasets_train:
+  num_images: null  # Number of training images; null means use all (Stage 1-1 overrides for debugging)
+  supercategory: ${all_sam3i_datasets_supercategories.${string:${submitit.job_array.task_index}}}
+
+  # Training data augmentation pipeline
+  train_transforms:
+    - _target_: sam3.train.transforms.basic_for_api.ComposeAPI
+      transforms:
+        - _target_: sam3.train.transforms.filter_query_transforms.FlexibleFilterFindGetQueries
+          query_filter:
+            _target_: sam3.train.transforms.filter_query_transforms.FilterCrowds
+        - _target_: sam3.train.transforms.point_sampling.RandomizeInputBbox
+          box_noise_std: 0.1
+          box_noise_max: 20
+        - _target_: sam3.train.transforms.segmentation.DecodeRle
+        - _target_: sam3.train.transforms.basic_for_api.RandomResizeAPI
+          sizes:
+            _target_: sam3.train.transforms.basic.get_random_resize_scales
+            size: ${scratch.resolution}
+            min_size: 480
+            rounded: false
+          max_size:
+            _target_: sam3.train.transforms.basic.get_random_resize_max_size
+            size: ${scratch.resolution}
+          square: true
+          consistent_transform: ${scratch.consistent_transform}
+        - _target_: sam3.train.transforms.basic_for_api.PadToSizeAPI
+          size: ${scratch.resolution}
+          consistent_transform: ${scratch.consistent_transform}
+        - _target_: sam3.train.transforms.basic_for_api.ToTensorAPI
+        - _target_: sam3.train.transforms.filter_query_transforms.FlexibleFilterFindGetQueries
+          query_filter:
+            _target_: sam3.train.transforms.filter_query_transforms.FilterEmptyTargets
+        - _target_: sam3.train.transforms.basic_for_api.NormalizeAPI
+          mean: ${scratch.train_norm_mean}
+          std: ${scratch.train_norm_std}
+        - _target_: sam3.train.transforms.filter_query_transforms.FlexibleFilterFindGetQueries
+          query_filter:
+            _target_: sam3.train.transforms.filter_query_transforms.FilterEmptyTargets
+    - _target_: sam3.train.transforms.filter_query_transforms.FlexibleFilterFindGetQueries
+      query_filter:
+        _target_: sam3.train.transforms.filter_query_transforms.FilterFindQueriesWithTooManyOut
+        max_num_objects: ${scratch.max_ann_per_img}
+
+  # Validation data augmentation pipeline
+  val_transforms:
+    - _target_: sam3.train.transforms.basic_for_api.ComposeAPI
+      transforms:
+        - _target_: sam3.train.transforms.segmentation.DecodeRle
+        - _target_: sam3.train.transforms.basic_for_api.RandomResizeAPI
+          sizes: ${scratch.resolution}
+          max_size:
+            _target_: sam3.train.transforms.basic.get_random_resize_max_size
+            size: ${scratch.resolution}
+          square: true
+          consistent_transform: False
+        - _target_: sam3.train.transforms.basic_for_api.ToTensorAPI
+        - _target_: sam3.train.transforms.basic_for_api.NormalizeAPI
+          mean: ${scratch.train_norm_mean}
+          std: ${scratch.train_norm_std}
+
+  # Loss function configuration
+  loss:
+    _target_: sam3.train.loss.sam3_loss.Sam3LossWrapper
+    matcher: ${scratch.matcher}
+    o2m_weight: 2.0
+    o2m_matcher:
+      _target_: sam3.train.matcher.BinaryOneToManyMatcher
+      alpha: 0.3
+      threshold: 0.4
+      topk: 4
+    use_o2m_matcher_on_o2m_aux: false
+    loss_fns_find:
+      - _target_: sam3.train.loss.loss_fns.Boxes
+        weight_dict:
+          loss_bbox: 5.0
+          loss_giou: 2.0
+      - _target_: sam3.train.loss.loss_fns.IABCEMdetr
+        weak_loss: False
+        weight_dict:
+          loss_ce: 20.0
+          presence_loss: 20.0
+        pos_weight: 10.0
+        alpha: 0.25
+        gamma: 2
+        use_presence: True
+        pos_focal: false
+        pad_n_queries: 200
+        pad_scale_pos: 1.0
+      - _target_: sam3.train.loss.loss_fns.Masks
+        focal_alpha: 0.25
+        focal_gamma: 2.0
+        weight_dict:
+          loss_mask: 200.0
+          loss_dice: 10.0
+        compute_aux: false
+    loss_fn_semantic_seg:
+      _target_: sam3.train.loss.loss_fns.SemanticSegCriterion
+      presence_head: True
+      presence_loss: False
+      focal: True
+      focal_alpha: 0.6
+      focal_gamma: 2.0
+      downsample: False
+      weight_dict:
+        loss_semantic_seg: 20.0
+        loss_semantic_presence: 1.0
+        loss_semantic_dice: 30.0
+    scale_by_find_batch_size: ${scratch.scale_by_find_batch_size}
+
+# ============================================================================
+# Common Hyperparameters
+# ============================================================================
+scratch:
+  enable_segmentation: True
+
+  # Model parameters
+  d_model: 256
+  pos_embed:
+    _target_: sam3.model.position_encoding.PositionEmbeddingSine
+    num_pos_feats: ${scratch.d_model}
+    normalize: true
+    scale: null
+    temperature: 10000
+
+  # Box post-processing
+  use_presence_eval: True
+  original_box_postprocessor:
+    _target_: sam3.eval.postprocessors.PostProcessImage
+    max_dets_per_img: -1
+    use_original_ids: true
+    use_original_sizes_box: true
+    use_presence: ${scratch.use_presence_eval}
+
+  # Matcher configuration
+  matcher:
+    _target_: sam3.train.matcher.BinaryHungarianMatcherV2
+    focal: true
+    cost_class: 2.0
+    cost_bbox: 5.0
+    cost_giou: 2.0
+    alpha: 0.25
+    gamma: 2
+    stable: False
+  scale_by_find_batch_size: True
+
+  # Image processing parameters
+  resolution: 1008
+  consistent_transform: False
+  max_ann_per_img: 200
+
+  # Normalization parameters
+  train_norm_mean: [0.5, 0.5, 0.5]
+  train_norm_std: [0.5, 0.5, 0.5]
+  val_norm_mean: [0.5, 0.5, 0.5]
+  val_norm_std: [0.5, 0.5, 0.5]
+
+  # Training parameters
+  num_train_workers: 10
+  num_val_workers: 0
+  max_data_epochs: 20
+  target_epoch_size: 1500
+  hybrid_repeats: 1
+  context_length: 2
+  gather_pred_via_filesys: false
+
+  # Learning rate and scheduler parameters (Stage 1-1/1-2 use lr_scale=12.8; Stage 3 overrides to 3.2)
+  lr_scale: 12.8
+  lr_transformer: ${times:8e-4,${scratch.lr_scale}}
+  lr_vision_backbone: ${times:2.5e-4,${scratch.lr_scale}}
+  lr_language_backbone: ${times:5e-5,${scratch.lr_scale}}
+  lrd_vision_backbone: 0.9
+  wd: 0.1
+  scheduler_timescale: 3
+  scheduler_warmup: 3
+  scheduler_cooldown: 3
+
+  val_batch_size: 1
+  collate_fn_val:
+    _target_: sam3.train.data.collator.collate_fn_api
+    _partial_: true
+    repeats: ${scratch.hybrid_repeats}
+    dict_key: sam3i_datasets
+    with_seg_masks: ${scratch.enable_segmentation}
+
+  gradient_accumulation_steps: 1
+  train_batch_size: 1
+  collate_fn:
+    _target_: sam3.train.data.collator.collate_fn_api
+    _partial_: true
+    repeats: ${scratch.hybrid_repeats}
+    dict_key: all
+    with_seg_masks: ${scratch.enable_segmentation}
+
+# ============================================================================
+# Trainer Configuration
+# ============================================================================
+trainer:
+  _target_: sam3.train.trainer.Trainer
+  skip_saving_ckpts: False
+  empty_gpu_mem_cache_after_eval: True
+  skip_first_val: True
+  max_epochs: 8
+  accelerator: cuda
+  seed_value: 123
+  val_epoch_freq: 100
+  mode: train_only
+  gradient_accumulation_steps: ${scratch.gradient_accumulation_steps}
+  inst_stage: "1_1"  # Overridden per stage
+
+  distributed:
+    backend: nccl
+    find_unused_parameters: True
+    gradient_as_bucket_view: True
+
+  loss:
+    all: ${sam3i_datasets_train.loss}
+    default:
+      _target_: sam3.train.loss.sam3_loss.DummyLoss
+
+  data:
+    train:
+      _target_: sam3.train.data.torch_dataset.TorchDataset
+      dataset:
+        _target_: torch.utils.data.ConcatDataset
+        datasets:
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_RefCOCOg}
+            ann_file: ${paths.sam3i_datasets_root}/RefCOCOg/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_gRefCOCO}
+            ann_file: ${paths.sam3i_datasets_root}/gRefCOCO/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_MMR}
+            ann_file: ${paths.sam3i_datasets_root}/MMR/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_RefCOCOplus}
+            ann_file: ${paths.sam3i_datasets_root}/RefCOCOplus/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_RefCOCO}
+            ann_file: ${paths.sam3i_datasets_root}/RefCOCO/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_RefZOM}
+            ann_file: ${paths.sam3i_datasets_root}/Ref-ZOM/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_HMPL_1to1}
+            ann_file: ${paths.sam3i_datasets_root}/HMPL-Instruct_1to1/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_HMPL_1toAll}
+            ann_file: ${paths.sam3i_datasets_root}/HMPL-Instruct_1toAll/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_HMPL_1toN}
+            ann_file: ${paths.sam3i_datasets_root}/HMPL-Instruct_1toN/sam3i_train.json
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            transforms: ${sam3i_datasets_train.train_transforms}
+            load_segmentation: ${scratch.enable_segmentation}
+            max_ann_per_img: 500000
+            multiplier: 1
+            max_train_queries: 50000
+            max_val_queries: 50000
+            training: true
+            use_caching: False
+            img_folder: ${paths.img_folder_ReasonSeg}
+            ann_file: ${paths.sam3i_datasets_root}/ReasonSeg/sam3i_train.json
+      shuffle: True
+      batch_size: ${scratch.train_batch_size}
+      num_workers: ${scratch.num_train_workers}
+      pin_memory: True
+      drop_last: True
+      collate_fn: ${scratch.collate_fn}
+
+    val:
+      _target_: sam3.train.data.torch_dataset.TorchDataset
+      dataset:
+        _target_: torch.utils.data.ConcatDataset
+        datasets:
+          - _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+            limit_ids: ${sam3i_datasets_train.num_images}
+            load_segmentation: ${scratch.enable_segmentation}
+            coco_json_loader:
+              _target_: sam3.train.data.coco_json_loaders.COCO_FROM_JSON
+              include_negatives: true
+              category_chunk_size: 2
+              _partial_: true
+            img_folder: ${paths.img_folder_gRefCOCO}
+            ann_file: ${paths.sam3i_datasets_root}/gRefCOCO/sam3i_val.json
+            transforms: ${sam3i_datasets_train.val_transforms}
+            max_ann_per_img: 100000
+            multiplier: 1
+            training: false
+      shuffle: False
+      batch_size: ${scratch.val_batch_size}
+      num_workers: ${scratch.num_val_workers}
+      pin_memory: True
+      drop_last: False
+      collate_fn: ${scratch.collate_fn_val}
+
+  model:
+    _target_: sam3.model_builder.build_sam3_image_model
+    bpe_path: ${paths.bpe_path}
+    # checkpoint_path: null  # If not specified, base weights are downloaded from HuggingFace
+    eval_mode: false
+    inst_stage: ${trainer.inst_stage}
+    enable_segmentation: ${scratch.enable_segmentation}
+    adapter_config: {
+                      "adapter_dim": 64,
+                      "adapter_heads": 4,
+                      "adapter_scale": 1.0,
+                    }
+    copy_adapter: True
+
+  meters:
+    val:
+      sam3i_datasets:
+        detection:
+          _target_: sam3.eval.coco_writer.PredictionDumper
+          iou_type: "bbox"
+          dump_dir: ${launcher.experiment_log_dir}/dumps/sam3i_datasets/${sam3i_datasets_train.supercategory}
+          merge_predictions: True
+          postprocessor: ${scratch.original_box_postprocessor}
+          gather_pred_via_filesys: ${scratch.gather_pred_via_filesys}
+          maxdets: 100
+          pred_file_evaluators:
+            - _target_: sam3.eval.coco_eval_offline.CocoEvaluatorOfflineWithPredFileEvaluators
+              gt_path:
+                - ${paths.sam3i_datasets_root}/gRefCOCO/sam3i_val.json
+              tide: False
+              iou_type: "bbox"
+
+  optim:
+    amp:
+      enabled: True
+      amp_dtype: bfloat16
+
+    optimizer:
+      _target_: torch.optim.AdamW
+
+    gradient_clip:
+      _target_: sam3.train.optim.optimizer.GradientClipper
+      max_norm: 0.1
+      norm_type: 2
+
+    param_group_modifiers:
+      - _target_: sam3.train.optim.optimizer.layer_decay_param_modifier
+        _partial_: True
+        layer_decay_value: ${scratch.lrd_vision_backbone}
+        apply_to: 'backbone.vision_backbone.trunk'
+        overrides:
+          - pattern: '*pos_embed*'
+            value: 1.0
+
+    options:
+      lr:
+        - scheduler:
+            _target_: sam3.train.optim.schedulers.InverseSquareRootParamScheduler
+            base_lr: ${scratch.lr_transformer}
+            timescale: ${scratch.scheduler_timescale}
+            warmup_steps: ${scratch.scheduler_warmup}
+            cooldown_steps: ${scratch.scheduler_cooldown}
+        - scheduler:
+            _target_: sam3.train.optim.schedulers.InverseSquareRootParamScheduler
+            base_lr: ${scratch.lr_vision_backbone}
+            timescale: ${scratch.scheduler_timescale}
+            warmup_steps: ${scratch.scheduler_warmup}
+            cooldown_steps: ${scratch.scheduler_cooldown}
+          param_names:
+            - 'backbone.vision_backbone.*'
+        - scheduler:
+            _target_: sam3.train.optim.schedulers.InverseSquareRootParamScheduler
+            base_lr: ${scratch.lr_language_backbone}
+            timescale: ${scratch.scheduler_timescale}
+            warmup_steps: ${scratch.scheduler_warmup}
+            cooldown_steps: ${scratch.scheduler_cooldown}
+          param_names:
+            - 'backbone.language_backbone.*'
+
+      weight_decay:
+        - scheduler:
+            _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+            value: ${scratch.wd}
+        - scheduler:
+            _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+            value: 0.0
+          param_names:
+            - '*bias*'
+          module_cls_names: ['torch.nn.LayerNorm']
+
+  checkpoint:
+    save_dir: ${launcher.experiment_log_dir}/checkpoints
+    save_freq: 1
+
+  logging:
+    tensorboard_writer:
+      _target_: sam3.train.utils.logger.make_tensorboard_logger
+      log_dir: ${launcher.experiment_log_dir}/tensorboard
+      flush_secs: 120
+      should_log: True
+    wandb_writer: null
+    log_dir: ${launcher.experiment_log_dir}/logs/${sam3i_datasets_train.supercategory}
+    log_freq: 10
+
+# ============================================================================
+# Launcher and Submitit Configuration
+# ============================================================================
+launcher:
+  num_nodes: 1
+  gpus_per_node: 8
+  experiment_log_dir: ${paths.experiment_log_dir}
+  multiprocessing_context: forkserver
+
+submitit:
+  account: null
+  partition: null
+  qos: null
+  timeout_hour: 72
+  use_cluster: True
+  cpus_per_task: 10
+  port_range: [10000, 65000]
+  constraint: null
+  job_array:
+    num_tasks: 100
+    task_index: 0
+
+# ============================================================================
+# Available Dataset Supercategories
+# ============================================================================
+all_sam3i_datasets_supercategories:
+  - gRefCOCO
+  - MMR
+  - HMPL-Instruct_1to1
+  - HMPL-Instruct_1toAll
+  - HMPL-Instruct_1toN
+  - ReasonSeg
+  - Ref-ZOM
+  - RefCOCO
+  - RefCOCOg
+  - RefCOCOplus

@@ -1,0 +1,126 @@
+#!/bin/bash
+# ============================================================================
+# SAM3-I Evaluation Script
+# ============================================================================
+# Two-step pipeline: 1) Run inference to generate predictions  2) Compute metrics (gIoU, P@0.5)
+#
+# Usage:
+#   bash scripts/eval.sh                              # Use default config
+#   CHECKPOINT=/path/to/ckpt bash scripts/eval.sh     # Custom checkpoint
+#   GPUS=0,1 CATEGORIES=simple bash scripts/eval.sh
+#
+# All hyperparameters can be overridden via environment variables.
+# ============================================================================
+
+set -e
+
+# ============================================================================
+# Hyperparameters (overridable via environment variables)
+# ============================================================================
+# Model checkpoint path (must be specified by the user)
+CHECKPOINT="${CHECKPOINT:-}"
+
+# Dataset root directory (containing RefCOCO/, gRefCOCO/, etc.)
+DATASET_ROOT="${DATASET_ROOT:-./sam3i_datasets}"
+
+# Output directory (relative to project root)
+OUTPUT_DIR="${OUTPUT_DIR:-./outputs/eval_results}"
+
+# GPU configuration
+GPUS="${GPUS:-0,1,2,3,4,5,6,7}"
+BATCH_SIZE="${BATCH_SIZE:-32}"
+DET_THRESHOLD="${DET_THRESHOLD:-0.5}"
+
+# Evaluation datasets (space-separated)
+# Full set: RefCOCO RefCOCOg RefCOCOplus gRefCOCO Ref-ZOM HMPL-Instruct_1to1 HMPL-Instruct_1toAll HMPL-Instruct_1toN ReasonSeg MMR
+DATASETS="${DATASETS:-HMPL-Instruct_1to1 HMPL-Instruct_1toAll HMPL-Instruct_1toN}"
+
+# Evaluation categories (space-separated): concept / simple / complex
+CATEGORIES="${CATEGORIES:-simple complex}"
+
+# ============================================================================
+# Paths
+# ============================================================================
+PROJ_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+INFERENCE_SCRIPT="${PROJ_ROOT}/scripts/inference.py"
+EVALUATE_SCRIPT="${PROJ_ROOT}/scripts/evaluate.py"
+
+# Check if checkpoint is specified
+if [ -z "${CHECKPOINT}" ]; then
+    echo "Error: Please specify model checkpoint via the CHECKPOINT environment variable."
+    echo "Usage: CHECKPOINT=/path/to/checkpoint.pt bash scripts/eval.sh"
+    exit 1
+fi
+
+mkdir -p "${OUTPUT_DIR}"
+
+echo "========================================"
+echo "SAM3-I Evaluation Pipeline"
+echo "  Checkpoint:    ${CHECKPOINT}"
+echo "  Dataset Root:  ${DATASET_ROOT}"
+echo "  Output Dir:    ${OUTPUT_DIR}"
+echo "  GPUs:          ${GPUS}"
+echo "  Batch Size:    ${BATCH_SIZE}"
+echo "  Categories:    ${CATEGORIES}"
+echo "  Datasets:      ${DATASETS}"
+echo "========================================"
+
+# ============================================================================
+# Run inference + evaluation
+# ============================================================================
+for CATEGORY in ${CATEGORIES}; do
+    echo ""
+    echo "=========================================="
+    echo "  Category: ${CATEGORY}"
+    echo "=========================================="
+
+    for DATA in ${DATASETS}; do
+        GT_PATH="${DATASET_ROOT}/${DATA}/sam3i_val.json"
+        PRED_PATH="${OUTPUT_DIR}/${DATA}_${CATEGORY}.json"
+
+        if [ ! -f "${GT_PATH}" ]; then
+            echo "[SKIP] ${DATA}: GT file not found (${GT_PATH})"
+            continue
+        fi
+
+        echo ""
+        echo "--- ${DATA} (${CATEGORY}) ---"
+
+        # Select evaluation mode based on dataset type
+        EVAL_MODE="1to1"
+if [[ "${DATA}" == "HMPL-Instruct_1toAll" || "${DATA}" == "HMPL-Instruct_1toN" ]]; then
+            EVAL_MODE="multi_inst"
+        fi
+
+        KEEP_TOP1_FLAG=""
+        if [ "${EVAL_MODE}" = "1to1" ]; then
+            case "${DATA}" in
+                HMPL-Instruct_*) ;;
+                *) KEEP_TOP1_FLAG="--keep_top1" ;;
+            esac
+        fi
+
+        echo "  Step 1: Inference..."
+        python "${INFERENCE_SCRIPT}" \
+            --json_path "${GT_PATH}" \
+            --image_root "${DATASET_ROOT}/${DATA}/" \
+            --output_path "${PRED_PATH}" \
+            --checkpoint_path "${CHECKPOINT}" \
+            --categories "${CATEGORY}" \
+            --batch_size "${BATCH_SIZE}" \
+            --gpus "${GPUS}" \
+            --detection_threshold "${DET_THRESHOLD}" \
+            ${KEEP_TOP1_FLAG}
+
+        echo "  Step 2: Evaluation..."
+        python "${EVALUATE_SCRIPT}" \
+            --gt_path "${GT_PATH}" \
+            --pred_path "${PRED_PATH}" \
+            --mode "${EVAL_MODE}"
+    done
+done
+
+echo ""
+echo "========================================"
+echo "All evaluations completed! Results saved to ${OUTPUT_DIR}/"
+echo "========================================"

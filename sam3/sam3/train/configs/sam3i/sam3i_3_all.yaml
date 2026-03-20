@@ -1,0 +1,80 @@
+# @package _global_
+# ============================================================================
+# SAM3-I Stage 3: Full-stage Joint Training
+# ============================================================================
+# Inherits base.yaml, only overrides Stage 3 specific parameters.
+# Requires completing Stage 1-2 training first.
+#
+# Differences from Stage 1:
+#   - Lower learning rate (lr_scale: 3.2 vs 12.8)
+#   - Shorter warmup/cooldown (1 vs 3)
+#   - Fewer training epochs (4 vs 8)
+#   - Additional KL / InfoNCE / Margin Loss
+#   - share_mlp_params = True
+# ============================================================================
+defaults:
+  - base
+  - _self_
+
+# Override paths: log directory
+paths:
+  experiment_log_dir: ./outputs/logs/sam3i_3_all
+
+# Stage 3 uses all images
+sam3i_datasets_train:
+  num_images: null
+  # Override loss config: add Stage 3 specific loss parameters on top of base loss
+  loss:
+    # Stage 3 specific loss parameters
+    use_kl: ${scratch.use_kl_loss}
+    use_hard: ${scratch.use_enhanced_seg_loss}
+    use_infonce: ${scratch.use_infonce_loss}
+    use_margin: ${scratch.use_margin_loss}
+    margin_loss_m: ${scratch.margin_loss_m}
+    kl_loss_weight: ${scratch.kl_loss_weight}
+    enhanced_seg_loss_weight: ${scratch.enhanced_seg_loss_weight}
+    infonce_loss_weight: ${scratch.infonce_loss_weight}
+    infonce_loss_rho: ${scratch.infonce_loss_rho}
+    margin_loss_weight: ${scratch.margin_loss_weight}
+
+# Override common hyperparameters
+scratch:
+  # Stage 3 specific loss switches and weights
+  use_kl_loss: True
+  use_enhanced_seg_loss: True
+  use_infonce_loss: True
+  use_margin_loss: True
+  margin_loss_m: 0.2
+  infonce_loss_rho: 0.5
+  kl_loss_weight: 0.001
+  enhanced_seg_loss_weight: 1.0
+  infonce_loss_weight: 1.0
+  margin_loss_weight: 1.0
+  share_mlp_params: True
+
+  # Lower learning rate scale factor
+  lr_scale: 3.2
+  # Shorter warmup/cooldown
+  scheduler_warmup: 1
+  scheduler_cooldown: 1
+
+# Trainer overrides
+trainer:
+  inst_stage: "3"
+  max_epochs: 4
+  model:
+    _target_: sam3.model_builder.build_sam3_image_model
+    bpe_path: ${paths.bpe_path}
+    # checkpoint_path: point to the Stage 1-2 checkpoint, e.g.:
+    checkpoint_path: ./outputs/logs/sam3i_1-2/checkpoints/checkpoint_8.pt
+    eval_mode: false
+    inst_stage: ${trainer.inst_stage}
+    enable_segmentation: ${scratch.enable_segmentation}
+    adapter_config: {
+                      "adapter_dim": 64,
+                      "adapter_heads": 4,
+                      "adapter_scale": 1.0,
+                    }
+    copy_adapter: True
+    share_mlp_params: ${scratch.share_mlp_params}
+    use_margin_loss: ${scratch.use_margin_loss}

@@ -1,0 +1,65 @@
+Metadata-Version: 2.4
+Name: sam3
+Version: 0.1.0
+Summary: SAM3 (Segment Anything Model 3) implementation
+Author: Meta AI Research
+Project-URL: Homepage, https://github.com/facebookresearch/sam3
+Project-URL: Bug Tracker, https://github.com/facebookresearch/sam3/issues
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: timm>=1.0.17
+Requires-Dist: numpy==1.26
+Requires-Dist: tqdm
+Requires-Dist: ftfy==6.1.1
+Requires-Dist: regex
+Requires-Dist: iopath>=0.1.10
+Requires-Dist: typing_extensions
+Requires-Dist: huggingface_hub
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: black==24.2.0; extra == "dev"
+Requires-Dist: ufmt==2.8.0; extra == "dev"
+Requires-Dist: ruff-api==0.1.0; extra == "dev"
+Requires-Dist: usort==1.0.2; extra == "dev"
+Requires-Dist: gitpython==3.1.31; extra == "dev"
+Requires-Dist: yt-dlp; extra == "dev"
+Requires-Dist: pandas; extra == "dev"
+Requires-Dist: opencv-python; extra == "dev"
+Requires-Dist: pycocotools; extra == "dev"
+Requires-Dist: numba; extra == "dev"
+Requires-Dist: python-rapidjson; extra == "dev"
+Provides-Extra: notebooks
+Requires-Dist: matplotlib; extra == "notebooks"
+Requires-Dist: jupyter; extra == "notebooks"
+Requires-Dist: notebook; extra == "notebooks"
+Requires-Dist: ipywidgets; extra == "notebooks"
+Requires-Dist: ipycanvas; extra == "notebooks"
+Requires-Dist: ipympl; extra == "notebooks"
+Requires-Dist: pycocotools; extra == "notebooks"
+Requires-Dist: decord; extra == "notebooks"
+Requires-Dist: opencv-python; extra == "notebooks"
+Requires-Dist: einops; extra == "notebooks"
+Requires-Dist: scikit-image; extra == "notebooks"
+Requires-Dist: scikit-learn; extra == "notebooks"
+Provides-Extra: train
+Requires-Dist: hydra-core; extra == "train"
+Requires-Dist: submitit; extra == "train"
+Requires-Dist: tensorboard; extra == "train"
+Requires-Dist: zstandard; extra == "train"
+Requires-Dist: scipy; extra == "train"
+Requires-Dist: torchmetrics; extra == "train"
+Requires-Dist: fvcore; extra == "train"
+Requires-Dist: fairscale; extra == "train"
+Requires-Dist: scikit-image; extra == "train"
+Requires-Dist: scikit-learn; extra == "train"

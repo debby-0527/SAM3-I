@@ -1,0 +1,23 @@
+# @package _global_
+# ============================================================================
+# SAM3-I Stage 1-1: Simple Query Training
+# ============================================================================
+# Inherits base.yaml, only overrides Stage 1-1 specific parameters.
+# Initial weights: automatically downloaded from HuggingFace (SAM3 base)
+# ============================================================================
+defaults:
+  - base
+  - _self_
+
+# Override paths: log directory
+paths:
+  experiment_log_dir: ./outputs/logs/sam3i_1-1
+
+# Stage 1-1 uses a small number of images for debug training (set to null to use all)
+sam3i_datasets_train:
+  num_images: 8
+
+# Trainer overrides
+trainer:
+  inst_stage: "1_1"
+  max_epochs: 8
